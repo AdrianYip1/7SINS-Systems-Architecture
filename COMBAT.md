@@ -107,7 +107,7 @@ Contains:
 
 ---
 
-## 7. Hazard System
+## 6. Hazard System
 
 Hazards are placed on grid cells and apply effects every tick.
 
@@ -123,7 +123,7 @@ Every tick:
 
 ---
 
-## 8. Team and Reserve Management
+## 7. Team and Reserve Management
 
 Each team has:
 - monsters on the grid (active monsters)
@@ -135,7 +135,7 @@ Swap behaviour:
 
 ---
 
-## 9. Obstacles
+## 8. Obstacles
 
 Obstacles block movement on a cell.
 
@@ -144,7 +144,7 @@ They are removed when:
 
 ---
 
-## 10. Data Flow Between Subsystems
+## 9. Data Flow Between Subsystems
 
 ```
 Clock System
