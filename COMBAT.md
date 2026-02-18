@@ -73,35 +73,128 @@ Each team operates on a determined grid size (typically 3×3, configurable).
 - Link modification enables dynamic grid restructuring
 
 ---
+## 5. Entity System (Monster Classes)
 
-## 5. Entity State Model
+Monsters in combat are built from two main parts:
 
-Monsters are instantiated from reusable templates defining element, class, base stats, and available actions.
+- `MonsterTemplate` — holds the base data for a monster (stats, actions, element, etc.)
+- `Monster` — the actual instance used during battle, which tracks HP, gauges, and combat changes
 
-### Main Values Required for Battle Loop
-
-| Value | Description |
-|------|-------------|
-| HP | Current and maximum health; death state at 0 |
-| AG | Action Gauge; fills up with ticks, activates auto actions when full |
-| EG | Energy Gauge; separate resource with threshold and max for special abilities |
-
-### Combat Multipliers
-
-- Physical attack multiplier
-- Elemental attack multiplier
-- Physical defense multiplier
-- Elemental defense multiplier
-
-Multipliers can change dynamically through actions and hazards, with reset methods to restore template defaults.
-
-### Action Selection
-
-Monsters maintain:
-- **Auto actions**: weighted probability distribution (modifiable at runtime)
-- **Active actions**: player-selectable actions with metadata (damage, targeting, duration)
+Templates never change during combat.  
+Monster objects hold the values that change every tick.
 
 ---
+
+### 5.1 Class Overview
+
+| Class | Purpose |
+|------|---------|
+| Monster | Tracks HP, gauges, multipliers, and actions during battle |
+| MonsterTemplate | Stores base stats and action data loaded from a database |
+| MonsterTemplateFactory | Loads templates and creates monsters from saved data |
+
+Monsters are created using the factory instead of manually building them.
+
+---
+
+### 5.2 MonsterTemplate
+
+A template defines what a monster is before combat starts.
+
+**Basic Info**
+- name
+- element
+- class
+- primary action
+- level
+
+**Base Stats**
+- hp_max
+- ag_max
+- eg_threshold
+- eg_max
+
+**Multipliers**
+- phys_attk_multi
+- elmt_attk_multi
+- phys_defn_multi
+- elmt_defn_multi
+
+**Actions**
+- auto_actions
+- auto_actions_prob
+- auto_actions_info
+- active_actions
+- active_actions_info
+
+Templates act like a blueprint.  
+Every monster instance starts from these values.
+
+---
+
+### 5.3 Monster (Battle Instance)
+
+A `Monster` object stores values that change during combat.
+
+#### HP, AG, and EG
+
+| Method | What it does |
+|-------|---------------|
+| GetHP() | Returns current HP |
+| SubtractHP(damage) | Applies damage |
+| AddHP(heal) | Restores health |
+| GetAG() | Returns action gauge |
+| AddAG(amount) | Adds to AG |
+| UseAG() | Resets AG after an action |
+| GetEG() | Returns energy gauge |
+| AddEG(amount) | Adds energy |
+| UseEG() | Consumes energy |
+
+#### Combat Multipliers
+
+Multipliers can change during battle:
+
+- GetPhysAttkMulti()
+- GetElmtAttkMulti()
+- GetPhysDefnMulti()
+- GetElmtDefnMulti()
+
+Set and reset methods allow temporary boosts without changing the template.
+
+---
+
+### 5.4 Actions
+
+Monsters have two action types.
+
+**Auto Actions**
+- GetAutoActionOptions()
+- GetRandomAutoActionInfo()
+- GetAutoActionProb()
+- AutoActionProbabilityChange(type_of_effect, param)
+- AutoActionProbabilityReset()
+
+Auto actions use a weighted list that can change during combat.
+
+**Active Actions**
+- GetActiveActionOptions()
+- GetActiveActionsInfo()
+
+Active actions are chosen by the player but use the same action data.
+
+---
+
+### 5.5 Creating a Monster
+
+Monsters are built using the factory system:
+
+factory = MonsterTemplateFactory.construct_custom(monster_database, auto_actions_database)
+
+monster_template = factory:LoadMonsterTemplate("Monster Name")
+
+monster = Monster.construct_default(monster_template)
+
+
 
 ## 6. Action System
 
