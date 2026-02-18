@@ -7,7 +7,7 @@ Source code is private. Documentation is provided for design review and portfoli
 
 ---
 
-## 1. System Goals
+## 1. System Functions
 
 - **Deterministic combat resolution** using a fixed timestep tick system
 - **Modular subsystem separation** to reduce cross-system coupling
@@ -21,11 +21,11 @@ Source code is private. Documentation is provided for design review and portfoli
 
 The combat engine is organized into independent subsystems that communicate through shared state and scheduled updates.
 
-| Subsystem        | Responsibility | Inputs | Outputs |
+| Subsystem        | Function | Inputs | Outputs |
 |------------------|---------------|--------|---------|
 | Tick Controller  | Advances time and drives updates | elapsed time | tick events |
 | Action Queue     | Stores and resolves actions (FIFO) | monster actions, player input | executed actions |
-| Grid System      | Spatial layout and movement | entity updates | cell state |
+| Grid System      | Spatial layout and movement | entity updates | cell states |
 | Entity State     | Monster stats, gauges, modifiers | combat events | updated stats |
 | Hazard System    | Timed cell effects | tick events | damage/heal/debuff events |
 | Team Manager     | Active + reserve logic | death/swap events | updated lineup |
@@ -37,7 +37,7 @@ Subsystems do not directly modify each other's internals; changes propagate thro
 
 ## 3. Execution Model
 
-Combat runs on a fixed tick (~1s timestep).
+Combat runs on a fixed tick (~0.5s timestep).
 
 **Per tick sequence:**
 
@@ -54,7 +54,7 @@ This update order ensures deterministic behavior regardless of frame rate or cli
 
 ## 4. Grid System
 
-Each team operates on a discrete grid (typically 3×3, configurable).
+Each team operates on a determined grid size (typically 3×3, configurable).
 
 **Cell structure:**
 - One monster (or nil)
@@ -78,12 +78,12 @@ Each team operates on a discrete grid (typically 3×3, configurable).
 
 Monsters are instantiated from reusable templates defining element, class, base stats, and available actions.
 
-### Core Runtime Values
+### Main Values Required for Battle Loop
 
 | Value | Description |
 |------|-------------|
 | HP | Current and maximum health; death state at 0 |
-| AG | Action Gauge; fills over time, enables actions when full |
+| AG | Action Gauge; fills up with ticks, activates auto actions when full |
 | EG | Energy Gauge; separate resource with threshold and max for special abilities |
 
 ### Combat Multipliers
@@ -121,9 +121,9 @@ Each action defines:
 
 ### Active Actions
 
-Player-selected actions use the same execution pipeline but can be inserted at the front of the queue via `enqueueBeforeFront()`.
+These use the same execution pipeline but can be inserted at the front of the queue
 
-This allows manual overrides without breaking deterministic execution or requiring separate code paths.
+This allows manual overrides without breaking execution or requiring separate code paths.
 
 ---
 
