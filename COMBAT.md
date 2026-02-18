@@ -1,103 +1,124 @@
-# Combat System — Overview
+# 7SINS Combat System — Overview
 
-High-level overview of the **7sins** combat system. This document describes design and behavior for showcase purposes.
+This document outlines the high-level design of the 7SINS grid-based combat engine.  
+It focuses on system behaviour and architecture rather than implementation details.  
+Source code is kept private; access can be provided upon request.
 
 ---
 
 ## Core Loop
 
-- **Tick-based** battle: time advances in fixed ticks (e.g. 1 second). Each tick:
-  - The **action queue** is updated (FIFO).
-  - The **front action** is executed (e.g. attack, heal, guard).
-  - **Hazards** on the grid tick and apply their effects (damage, heal, debuffs).
-- **Active (player) actions** can be inserted so they execute next (e.g. “use skill now” ahead of auto actions).
+Combat runs on a fixed tick (approximately half a second) to maintain deterministic execution.
+
+During each tick:
+- The action queue updates.
+- The next action executes (attack, heal, guard, etc.).
+- Hazards on the grid apply their effects.
+
+Player-triggered actions can be inserted at the front of the queue so they resolve immediately without disrupting the overall system order.
 
 ---
 
-## Grid & Positioning
+## Grid and Positioning
 
-- Each side has a **grid** (e.g. 3×3). Every cell can have:
-  - **Monster** (one per cell)
-  - **Hazards** (multiple per cell; same effect type overwrites, different types stack)
-  - **Obstacles** (block movement until destroyed; have HP and/or duration)
-- Movement uses **links** between cells (up/down/left/right). Pathing and placement respect traversability and occupancy.
+Each team operates on its own grid, typically 3×3.
 
----
+A cell may contain:
+- one monster
+- multiple hazards
+- one obstacle
 
-## Monsters & Stats
+Hazards of the same type overwrite existing ones, while different hazard types can stack.
 
-- **HP** — current and max; death at 0.
-- **Action Gauge (AG)** — fills over time; when full, the monster can perform an action and the gauge resets.
-- **Energy Gauge (EG)** — separate resource with threshold and max; used for stronger or special abilities.
-- **Combat multipliers** (modifiable in combat):
-  - Physical / Elemental **attack**
-  - Physical / Elemental **defense**
-
-Monsters are defined by **templates**: element, class, primary action type, base stats, and which actions they can use.
+Movement is controlled through directional links between cells (up, down, left, right).  
+Traversal checks both connectivity and cell occupancy.
 
 ---
 
-## Actions
+## Monsters and Stats
 
-**Auto actions** (AI / automatic behavior):
+Monsters are defined through reusable templates describing their element, class, base stats, and available actions.
 
-- Chosen each turn from a **weighted random** set (e.g. PhysAttack, ElmtAttack, Heal, Guard, Focus, Slack).
-- Weights can be changed by skills (e.g. “Maximize primary” to force one action).
-- Each action has targeting (e.g. single target), power (damage/heal values), and animation duration.
+Core runtime values:
+- HP — current and maximum health
+- Action Gauge (AG) — fills over time; when full, an action can be performed
+- Energy Gauge (EG) — secondary resource for stronger abilities
 
-**Active actions** (player-chosen):
+Combat multipliers include:
+- physical attack and defense
+- elemental attack and defense
 
-- Selected from the same or an extended set; when used, they can be **queued to run next** so they override the normal auto order.
+These values can change dynamically through skills and hazard effects.
 
-**Examples:**
+---
 
-- **PhysAttack / ElmtAttack** — single-target damage (physical vs elemental).
-- **Heal** — single-target heal.
-- **Guard** — increases defense for a period.
-- **Focus** — increases offense for a period.
-- **Slack** — no combat effect (pass turn).
+## Action System
 
-Damage and healing are subject to the relevant attack/defense multipliers.
+### Auto Actions
+
+Monsters select actions from a weighted pool such as:
+PhysAttack, ElmtAttack, Heal, Guard, Focus, and Slack.
+
+Weights may be modified by skills or combat state.  
+Each action defines targeting rules, power values, and animation timing.
+
+### Active Actions
+
+Player-selected actions use the same execution pipeline but can be queued to run next.
+
+Examples include:
+- PhysAttack or ElmtAttack — single-target damage
+- Heal — restores HP
+- Guard — temporary defense increase
+- Focus — temporary offense increase
+- Slack — pass turn
+
+Damage and healing scale according to attack and defense multipliers.
 
 ---
 
 ## Hazards
 
-- **Hazards** are placed on grid cells and last for a **duration** (number of ticks).
-- Each tick they apply an **effect** (e.g. damage, defense down, heal) with a given **strength**.
-- Types are defined in a central list (e.g. Damage, DefDown_10, DefDown_40, Heal) with duration and strength; specific instances can override strength.
+Hazards occupy grid cells for a fixed duration and trigger once per tick.
+
+Typical effects include:
+- damage over time
+- healing
+- defense reduction
+
+Hazard types are defined centrally with default duration and strength, though individual instances can override these values.
 
 ---
 
-## Teams & Reserve
+## Teams and Reserve System
 
-- A **team** is a grid plus:
-  - **Active** slots: monsters on the grid.
-  - **Reserve**: an ordered list of monsters not on the grid.
-- **Swap from reserve**: a reserve monster can replace an active one at the same cell; the previously active monster goes into reserve at the swapped position.
-- **Auto-swap**: when an active monster dies, it can be replaced by the next alive monster in reserve (e.g. front of list), so combat can continue.
+A team consists of active grid slots and an ordered reserve list.
+
+Key behaviours:
+- Reserve monsters can swap into active positions.
+- When an active monster dies, the next alive reserve unit can automatically replace it.
+- Swaps preserve grid position to maintain predictable system behaviour.
 
 ---
 
 ## Obstacles
 
-- **Obstacles** occupy cells and can have:
-  - **HP** — reduced by damage; when they reach 0, the obstacle is destroyed.
-  - **Duration** — counts down each tick; when it reaches 0, the obstacle is destroyed.
-- A cell is blocked for movement while its obstacle is not destroyed.
+Obstacles block movement while active.
+
+An obstacle may be removed by:
+- reducing its HP to zero, or
+- waiting for its duration to expire.
 
 ---
 
 ## Summary
 
-| Concept        | Role |
-|----------------|------|
-| **Grid**       | 3×3 (or similar) per side; cells hold monsters, hazards, obstacles. |
-| **Tick**       | Fixed timestep; drive queue execution and hazard ticks. |
-| **Action queue** | FIFO; front action runs each tick; active actions can be inserted at front. |
-| **Monsters**   | HP, AG, EG, phys/element attack and defense multipliers; auto + active actions. |
-| **Hazards**    | Duration + effect (damage/heal/debuff) per tick on a cell. |
-| **Teams**      | Active grid slots + ordered reserve; swap and auto-swap on death. |
-| **Obstacles**  | Block cells until destroyed (by HP or duration). |
-
-This document is a **design overview** for the combat system. Implementation details and source are not included here.
+System        | Purpose
+------------- | -------
+Grid          | Holds monsters, hazards, and obstacles
+Tick          | Drives combat timing
+Action Queue  | Controls execution order
+Monsters      | Stats, gauges, and actions
+Hazards       | Timed cell effects
+Teams         | Active grid and reserve list
+Obstacles     | Temporary blockers
