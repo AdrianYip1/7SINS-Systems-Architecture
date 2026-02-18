@@ -1,4 +1,4 @@
-# 7SINS Combat Engine — System Design Overview
+# 7SINS Combat Engine — System Overview
 
 This document describes the high-level architecture of the 7SINS grid-based combat engine.
 The focus is on subsystem structure, data flow, and deterministic execution rather than gameplay presentation.
@@ -7,23 +7,21 @@ Source code is private. Documentation is provided for design review and portfoli
 
 ---
 
-## 1. System Functions
+## 1. Core Functions
 
-- **Deterministic combat resolution** using a fixed timestep tick system
-- **Modular subsystem separation** to reduce cross-system coupling
-- **Data-driven behavior** for monsters, hazards, and actions via template system
-- **Predictable state transitions** to simplify debugging and testing
-- **Spatial consistency** through grid-based positioning and link-based traversal
+- Battles ooperate with a clock system, which is done too synchronize updates for the monsters, grid, and other battling logic
+- The grid controls movement, hazards, obsticals, while keeping track of all their locations
+- Monsters are created with templates, where all monsters have unique stats and actions
 
 ---
 
 ## 2. High-Level Architecture
 
-The combat engine is organized into independent subsystems that communicate through shared state and scheduled updates.
+The combat engine is organized into subsystems that communicate through shared states.
 
 | Subsystem        | Function | Inputs | Outputs |
 |------------------|---------------|--------|---------|
-| Tick Controller  | Advances time and drives updates | elapsed time | tick events |
+| Clock System     | Advances time and sends updates | elapsed time | tick events |
 | Action Queue     | Stores and resolves actions (FIFO) | monster actions, player input | executed actions |
 | Grid System      | Spatial layout and movement | entity updates | cell states |
 | Entity State     | Monster stats, gauges, modifiers | combat events | updated stats |
@@ -31,24 +29,19 @@ The combat engine is organized into independent subsystems that communicate thro
 | Team Manager     | Active + reserve logic | death/swap events | updated lineup |
 | Obstacle System  | Cell blocking and traversal rules | damage/duration updates | cell availability |
 
-Subsystems do not directly modify each other's internals; changes propagate through events generated during each tick.
-
 ---
 
-## 3. Execution Model
+## 3. Battle Flow
 
-Combat runs on a fixed tick (~0.5s timestep).
+Combat runs on a 0.5s tick loop.
 
-**Per tick sequence:**
-
-1. **Tick Controller** advances time accumulator
-2. **Action Queue** selects and dequeues the next action
-3. **Entity State** applies action results (damage, healing, stat modifications)
-4. **Hazard System** processes active hazards (tick duration, apply effects)
-5. **Team Manager** resolves deaths and triggers auto-swap if needed
-6. **Grid System** updates occupancy and link states if required
-
-This update order ensures deterministic behavior regardless of frame rate or client performance.
+For each tick:
+1. Monster action gauges increase
+2. Monsters with full AG choose and execute their actions
+   - If a monster chooses attack as their action, they get pushes into an attacking queue
+3. Damage, healing, stat changes, and movement are applied
+4. Dead monsters are checked and autoswaping logic is called when needed
+5. The grid updates the cell states afterwards, if anything has changed
 
 ---
 
@@ -56,228 +49,105 @@ This update order ensures deterministic behavior regardless of frame rate or cli
 
 Each team operates on a determined grid size (typically 3×3, configurable).
 
-**Cell structure:**
-- One monster (or nil)
-- Multiple hazards (array, same type overwrites, different types stack)
-- One obstacle (or nil)
-- Directional links (up, down, left, right) defining traversability
+Cell Structure:
+Each cell can contrain at maximum
+- one monster
+- multiple hazards
+- one obstacle
 
-**Traversal rules:**
-- Valid link must exist between source and destination cells
-- Destination cell must not contain a blocking obstacle
-- Destination cell must be unoccupied (no monster)
+Movement uses links which are passed as strings:
+- up, down, left, right
 
-**Spatial operations:**
-- Monster placement/removal maintains position mapping
-- Hazard addition merges or overwrites based on effect type
-- Link modification enables dynamic grid restructuring
+Traversal Rules:
+- a link between cells must exist
+- the destination cell must not have a monster or obstacle occupying it
 
----
-## 5. Entity System (Monster Classes)
+### Grid Helper Functions
 
-Monsters in combat are built from two main parts:
+Examples of helper functions for the grid:
 
-- `MonsterTemplate` — holds the base data for a monster (stats, actions, element, etc.)
-- `Monster` — the actual instance used during battle, which tracks HP, gauges, and combat changes
+- getCell(x, y)
+- inBounds(x, y)
+- canEnterCell(x, y)
+- canTraverse(x, y, direction)
+- movementCoordinates(x, y, direction)
 
-Templates never change during combat.  
-Monster objects hold the values that change every tick.
+### Moving and Editing the Grid
 
----
+- moveMonster(...)
+- addMonster(...)
+- removeMonster(...)
+- addHazard(...)
+- removeHazard(...)
+- addObstacle(...)
+- removeObstacle(...)
 
-### 5.1 Class Overview
-
-| Class | Purpose |
-|------|---------|
-| Monster | Tracks HP, gauges, multipliers, and actions during battle |
-| MonsterTemplate | Stores base stats and action data loaded from a database |
-| MonsterTemplateFactory | Loads templates and creates monsters from saved data |
-
-Monsters are created using the factory instead of manually building them.
+Hazards of the same type overwrite each other.
+Different hazard types stack.
 
 ---
+## 5. Monster System
+Monsters are split into 2 parts:
+- `MonsterTemplate` — data of the monster loaded froom a database
+- `Monster` — the monster object used during battle
 
-### 5.2 MonsterTemplate
+Templates do not change during combat.  
+Monster objects track HP, gauges, and combat effects.
 
-A template defines what a monster is before combat starts.
+---
+### MonsterTemplate
 
-**Basic Info**
-- name
-- element
-- class
-- primary action
+Contains:
+- name, element, and class tags
+- primary action type
 - level
-
-**Base Stats**
-- hp_max
-- ag_max
-- eg_threshold
-- eg_max
-
-**Multipliers**
-- phys_attk_multi
-- elmt_attk_multi
-- phys_defn_multi
-- elmt_defn_multi
-
-**Actions**
-- auto_actions
-- auto_actions_prob
-- auto_actions_info
-- active_actions
-- active_actions_info
-
-Templates act like a blueprint.  
-Every monster instance starts from these values.
-
----
-
-### 5.3 Monster (Battle Instance)
-
-A `Monster` object stores values that change during combat.
-
-#### HP, AG, and EG
-
-| Method | What it does |
-|-------|---------------|
-| GetHP() | Returns current HP |
-| SubtractHP(damage) | Applies damage |
-| AddHP(heal) | Restores health |
-| GetAG() | Returns action gauge |
-| AddAG(amount) | Adds to AG |
-| UseAG() | Resets AG after an action |
-| GetEG() | Returns energy gauge |
-| AddEG(amount) | Adds energy |
-| UseEG() | Consumes energy |
-
-#### Combat Multipliers
-
-Multipliers can change during battle:
-
-- GetPhysAttkMulti()
-- GetElmtAttkMulti()
-- GetPhysDefnMulti()
-- GetElmtDefnMulti()
-
-Set and reset methods allow temporary boosts without changing the template.
-
----
-
-### 5.4 Actions
-
-Monsters have two action types.
-
-**Auto Actions**
-- GetAutoActionOptions()
-- GetRandomAutoActionInfo()
-- GetAutoActionProb()
-- AutoActionProbabilityChange(type_of_effect, param)
-- AutoActionProbabilityReset()
-
-Auto actions use a weighted list that can change during combat.
-
-**Active Actions**
-- GetActiveActionOptions()
-- GetActiveActionsInfo()
-
-Active actions are chosen by the player but use the same action data.
-
----
-
-### 5.5 Creating a Monster
-
-Monsters are built using the factory system:
-
-factory = MonsterTemplateFactory.construct_custom(monster_database, auto_actions_database)
-
-monster_template = factory:LoadMonsterTemplate("Monster Name")
-
-monster = Monster.construct_default(monster_template)
-
-
-
-## 6. Action System
-
-### Auto Actions
-
-Monsters select actions from a weighted pool: PhysAttack, ElmtAttack, Heal, Guard, Focus, Slack
-
-**Selection algorithm:**
-- Cumulative probability distribution over available actions
-- Random selection weighted by current probabilities
-- Probabilities can be modified mid-combat (e.g., "MaximizePrimaryProb" effect)
-
-Each action defines:
-- Targeting rules (single target, area, self, etc.)
-- Power values (damage, heal amounts)
-- Execution timing (animation duration)
-
-### Active Actions
-
-These use the same execution pipeline but can be inserted at the front of the queue
-
-This allows manual overrides without breaking execution or requiring separate code paths.
+- hp_max, ag_max, eg values
+- battle multipliers
+- auto action action lists and probabilities
 
 ---
 
 ## 7. Hazard System
 
-Hazards exist on grid cells with defined properties:
+Hazards are placed on grid cells and apply effects every tick.
 
-| Property | Description |
-|----------|-------------|
-| Duration | Number of ticks remaining (decrements each tick) |
-| Strength | Effect magnitude (damage amount, heal amount, debuff percentage) |
-| Type     | Effect category (damage, heal, def_down, etc.) |
+Each hazard has:
+- duration
+- strength
+- type
 
-**Per-tick behavior:**
-- Duration decreases by 1
-- Effect is applied to the occupying monster (if present)
-- Expired hazards are removed from the cell
-
-**Hazard management:**
-- Centralized definitions maintain consistency (duration, type, default strength)
-- Instance-level strength overrides allow customization
-- Same-type hazards overwrite existing ones; different types stack
+Every tick:
+- duration decreases
+- effect applies to the monster in that cell (if applicable)
+- expired hazards are removed
 
 ---
 
 ## 8. Team and Reserve Management
 
-A team consists of:
-- **Active slots**: monsters placed on the grid with position tracking
-- **Reserve list**: ordered collection of monsters not currently on the grid
+Each team has:
+- monsters on the grid (active monsters)
+- an ordered reserve list
 
-**Swap behavior:**
-- A reserve monster may replace an active one at the same cell position
-- The previously active monster moves to reserve at the swapped position
-- Position consistency is maintained (no grid restructuring required)
-
-**Auto-swap on death:**
-- When an active monster dies, the next alive reserve unit automatically swaps in
-- Reserve list is compacted (alive monsters first) before selection
-- Ensures combat continuity without manual intervention
+Swap behaviour:
+- A reserve monster can replace an active one at the same position.
+- When a monster dies, the next alive reserve monster automatically swaps in.
 
 ---
 
 ## 9. Obstacles
 
-Obstacles occupy cells and block traversal.
+Obstacles block movement on a cell.
 
-**Removal conditions (OR logic):**
-- HP reaches zero (damage-based removal)
-- Duration expires (time-based removal)
-
-**State evaluation:**
-- Obstacle state is checked during each tick after action resolution
-- Destroyed obstacles immediately free the cell for traversal and placement
+They are removed when:
+- HP reaches zero or duration expires
 
 ---
 
 ## 10. Data Flow Between Subsystems
 
 ```
-Tick Controller
+Clock System
     ↓
 Action Queue → Entity State
     ↓              ↓
@@ -286,44 +156,15 @@ Hazard System → Team Manager
 Grid System ←─────┘
 ```
 
-**Flow characteristics:**
-- Tick Controller acts as the root scheduler
-- Subsystems update sequentially to avoid ambiguous state changes
-- Entity State modifications trigger downstream updates (death → Team Manager)
-- Grid System reflects final state after all modifications complete
-
 ---
+## 10. Summary
 
-## 11. Design Patterns
+The combat system:
 
-**Encapsulation:**
-- Monster state (HP, gauges, multipliers) is private with controlled accessors
-- Grid cells expose only necessary state through getter methods
-- Template system separates data definition from runtime behavior
+- Grid handles space.
+- Monster handles battle stats for entities.
+- Templates hold the database for monsters, and future battling features.
+- Hazards and obstacles modify cells.
+- The tick loop keeps everything in sync.
 
-**Separation of Concerns:**
-- Action definitions separate from execution logic
-- Hazard effects separate from grid management
-- Team management separate from entity state
-
-**Determinism:**
-- Fixed tick rate ensures consistent timing
-- FIFO queue ensures predictable execution order
-- Sequential subsystem updates prevent race conditions
-
----
-
-## 12. Summary
-
-| System        | Purpose |
-|---------------|---------|
-| Tick Controller | Drives deterministic updates at fixed intervals |
-| Action Queue  | Controls execution order with FIFO + priority insertion |
-| Grid System   | Manages spatial state and traversal rules |
-| Entity State  | Stores monster stats, gauges, and modifiers |
-| Hazard System | Applies timed effects with duration tracking |
-| Team Manager  | Handles swaps and reserve logic with auto-recovery |
-| Obstacles     | Temporary movement blockers with dual removal conditions |
-
-The combat engine emphasizes deterministic execution, modular subsystem boundaries, and predictable data flow.
-This structure supports scalable feature additions without requiring changes to core architecture.
+This setup allowing for future features to be added without rewriting existing systems.
