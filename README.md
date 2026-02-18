@@ -10,7 +10,7 @@ Combat is documented at **[COMBAT.md](COMBAT.md)**. That overview describes:
 - Tick-based battle loop and action queue
 - Grid, monsters, hazards, obstacles
 - Stats (HP, action gauge, energy gauge, attack/defense multipliers)
-- Auto vs active actions (e.g. PhysAttack, ElmtAttack, Heal, Guard, Focus)
-- Teams, reserve, and swapping
+- Auto vs active actions
+- Team Implementations, Reserve Slots, and Swapping
 
 No implementation or source is included as it is a design showcase/summary.
