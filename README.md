@@ -1,7 +1,7 @@
 # 7SINS-Systems-Architecture
 Source code is private. Available upon request.
 
-Roblox project — grid-based, tick-driven combat with monsters, hazards, and teams.
+Game project designed in Luau — grid-based, tick-driven combat with monsters, hazards, and teams.
 
 ## Combat
 
