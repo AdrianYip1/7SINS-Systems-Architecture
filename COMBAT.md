@@ -1,8 +1,6 @@
 # 7SINS Combat Engine — System Overview
 
-This document describes the high-level architecture of the 7SINS grid-based combat engine.
-The focus is on subsystem structure, data flow, and deterministic execution rather than gameplay presentation.
-
+This document describes the functionality of the combat system
 Source code is private. Documentation is provided for design review and portfolio purposes.
 
 ---
