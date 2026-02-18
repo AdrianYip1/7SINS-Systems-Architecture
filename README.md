@@ -5,7 +5,7 @@ Roblox project — grid-based, tick-driven combat with monsters, hazards, and te
 
 ## Combat
 
-Combat is documented at **[docs/COMBAT.md](docs/COMBAT.md)**. That overview describes:
+Combat is documented at **[COMBAT.md](COMBAT.md)**. That overview describes:
 
 - Tick-based battle loop and action queue
 - Grid, monsters, hazards, obstacles
