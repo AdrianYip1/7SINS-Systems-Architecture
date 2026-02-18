@@ -152,7 +152,7 @@ Clock System
 Action Queue → Entity State
     ↓              ↓
 Hazard System → Team Manager
-    ↓              ↓
+    ↓             
 Grid System ←─────┘
 ```
 
